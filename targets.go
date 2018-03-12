@@ -38,3 +38,12 @@ func (ts Targets) Contains(name string) bool {
 
 	return false
 }
+
+func (ts Targets) Strings() []string {
+	var res []string
+	for _, t := range ts {
+		res = append(res, t.Name)
+	}
+
+	return res
+}

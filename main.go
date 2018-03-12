@@ -20,6 +20,28 @@ var (
 	}
 )
 
+type Strings []string
+
+func (s Strings) IndexOf(n string) int {
+	for i, v := range s {
+		if v == n {
+			return i
+		}
+	}
+
+	return -1
+}
+
+func (s Strings) Contains(n string) bool {
+	for _, v := range s {
+		if v == n {
+			return true
+		}
+	}
+
+	return false
+}
+
 func readString(prompt string, required bool) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("%s: ", prompt)
