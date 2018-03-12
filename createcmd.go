@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-systemd/unit"
+	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
 )
 
@@ -39,6 +40,8 @@ type CreateOptions struct {
 
 var (
 	createOpts = CreateOptions{}
+	types      = Strings{"simple", "forking", "oneshot", "dbus", "notify", "idle"}
+	restarts   = Strings{"no", "always", "on-success", "on-failure", "on-abnormal", "on-abort", "on-watchdog"}
 
 	createCmd = &cobra.Command{
 		Use:   "create <executable> <description> <after> <wanted-by>",
@@ -51,95 +54,112 @@ var (
 			}
 
 			createOpts.Type = strings.ToLower(createOpts.Type)
-			switch createOpts.Type {
-			case "simple":
-			case "forking":
-			case "oneshot":
-			case "dbus":
-			case "notify":
-			case "idle":
-			default:
+			if !types.Contains(createOpts.Type) {
 				return fmt.Errorf("No such service type: %s", createOpts.Type)
 			}
 			createOpts.Restart = strings.ToLower(createOpts.Restart)
-			switch createOpts.Restart {
-			case "no":
-			case "always":
-			case "on-success":
-			case "on-failure":
-			case "on-abnormal":
-			case "on-abort":
-			case "on-watchdog":
-			default:
-				return fmt.Errorf("No such service type: %s", createOpts.Type)
+			if !restarts.Contains(createOpts.Restart) {
+				return fmt.Errorf("No such restart type: %s", createOpts.Restart)
 			}
 
 			if len(args) >= 1 {
 				createOpts.Exec = args[0]
-			} else {
-				createOpts.Exec, err = readString("Which executable do you want to create a service for", true)
-				if err != nil {
-					return fmt.Errorf("create needs an executable to create a service for")
-				}
 			}
-
-			stat, err := os.Stat(createOpts.Exec)
-			if os.IsNotExist(err) {
-				return fmt.Errorf("Could not find executable: %s is not a file", createOpts.Exec)
-			}
-			if stat.IsDir() {
-				return fmt.Errorf("Could not find executable: %s is a directory", createOpts.Exec)
-			}
-			if stat.Mode()&0111 == 0 {
-				return fmt.Errorf("%s is not executable", createOpts.Exec)
-			}
-
 			if len(args) >= 2 {
 				createOpts.Description = args[1]
-			} else {
-				createOpts.Description, _ = readString("Description", true)
-			}
-			if len(createOpts.Description) == 0 {
-				return fmt.Errorf("Description for this service can't be empty")
-			}
-
-			if len(args) >= 4 {
-				createOpts.WantedBy = args[3]
 			}
 			if len(args) >= 3 {
 				createOpts.After = args[2]
 			}
-			if len(createOpts.After) == 0 || len(createOpts.WantedBy) == 0 {
-				fmt.Println("Available targets:")
-				for _, t := range ts {
-					fmt.Printf("%s - %s\n", t.Name, t.Description)
+			if len(args) >= 4 {
+				createOpts.WantedBy = args[3]
+
+				validate()
+				return executeCreate()
+			} else {
+				app := tview.NewApplication()
+				form := tview.NewForm().
+					AddInputField("Exec", createOpts.Exec, 40, nil, func(s string) {
+						createOpts.Exec = s
+					}).
+					AddInputField("Description", createOpts.Description, 40, nil, func(s string) {
+						createOpts.Description = s
+					}).
+					AddDropDown("Type", types, types.IndexOf(createOpts.Type), func(s string, i int) {
+						createOpts.Type = s
+					}).
+					AddDropDown("Restarts", restarts, restarts.IndexOf(createOpts.Restart), func(s string, i int) {
+						createOpts.Restart = s
+					}).
+					AddDropDown("Start After", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.After), func(s string, i int) {
+						createOpts.After = s
+					}).
+					AddDropDown("Wanted By", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.WantedBy), func(s string, i int) {
+						createOpts.WantedBy = s
+					})
+
+				form.
+					AddButton("Create", func() {
+						app.Stop()
+						if err := validate(); err != nil {
+							panic(err)
+						}
+						executeCreate()
+					}).
+					AddButton("Cancel", func() {
+						app.Stop()
+					})
+
+				form.SetBorder(true).SetTitle("Create new service").SetTitleAlign(tview.AlignCenter)
+				if err := app.SetRoot(form, true).Run(); err != nil {
+					return err
 				}
 			}
 
-			if len(createOpts.After) == 0 {
-				createOpts.After, _ = readString("Start after target", true)
-				if len(createOpts.After) == 0 {
-					return fmt.Errorf("create needs a target after which this service will be started")
-				}
-			}
-			if !ts.Contains(createOpts.After) {
-				return fmt.Errorf("Could not create service: no such target")
-			}
-
-			if len(createOpts.WantedBy) == 0 {
-				createOpts.WantedBy, _ = readString("Which target should this service be wanted by", true)
-				if len(createOpts.WantedBy) == 0 {
-					return fmt.Errorf("create needs a target which this service will be wanted by")
-				}
-			}
-			if !ts.Contains(createOpts.WantedBy) {
-				return fmt.Errorf("Could not create service: no such target")
-			}
-
-			return executeCreate()
+			return nil
 		},
 	}
 )
+
+func validate() error {
+	ts, err := targets()
+	if err != nil {
+		return fmt.Errorf("Can't find systemd targets: %s", err)
+	}
+
+	// Exec check
+	stat, err := os.Stat(createOpts.Exec)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("Could not find executable: %s is not a file", createOpts.Exec)
+	}
+	if stat.IsDir() {
+		return fmt.Errorf("Could not find executable: %s is a directory", createOpts.Exec)
+	}
+	if stat.Mode()&0111 == 0 {
+		return fmt.Errorf("%s is not executable", createOpts.Exec)
+	}
+
+	// Description check
+	if len(createOpts.Description) == 0 {
+		return fmt.Errorf("Description for this service can't be empty")
+	}
+
+	if len(createOpts.After) == 0 {
+		return fmt.Errorf("create needs a target after which this service will be started")
+	}
+	if !ts.Contains(createOpts.After) {
+		return fmt.Errorf("Could not create service: no such target")
+	}
+
+	if len(createOpts.WantedBy) == 0 {
+		return fmt.Errorf("create needs a target which this service will be wanted by")
+	}
+	if !ts.Contains(createOpts.WantedBy) {
+		return fmt.Errorf("Could not create service: no such target")
+	}
+
+	return nil
+}
 
 func executeCreate() error {
 	u := []*unit.UnitOption{
