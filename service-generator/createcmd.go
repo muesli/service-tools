@@ -278,8 +278,5 @@ func init() {
 	createCmd.PersistentFlags().StringVar(&createOpts.TimeoutStartSec, "timeoutstartsec", "", "How many seconds to wait for a startup")
 	createCmd.PersistentFlags().StringVar(&createOpts.TimeoutStopSec, "timeoutstopsec", "", "How many seconds to wait when stoping a service")
 
-	createCmd.PersistentFlags().StringVarP(&createOpts.After, "after", "a", "", "Target after which the service will be started")
-	createCmd.PersistentFlags().StringVarP(&createOpts.WantedBy, "wantedby", "b", "", "This service is wanted by this target")
-
 	RootCmd.AddCommand(createCmd)
 }
