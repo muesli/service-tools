@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/coreos/go-systemd/unit"
@@ -30,9 +29,9 @@ type CreateOptions struct {
 	Group            string
 
 	Restart         string
-	RestartSec      uint64
-	TimeoutStartSec uint64
-	TimeoutStopSec  uint64
+	RestartSec      string
+	TimeoutStartSec string
+	TimeoutStopSec  string
 
 	After    string
 	WantedBy string
@@ -183,9 +182,9 @@ func executeCreate() error {
 		&unit.UnitOption{"Service", "User", createOpts.User},
 		&unit.UnitOption{"Service", "Group", createOpts.Group},
 		&unit.UnitOption{"Service", "Restart", createOpts.Restart},
-		&unit.UnitOption{"Service", "RestartSec", strconv.FormatUint(createOpts.RestartSec, 10)},
-		&unit.UnitOption{"Service", "TimeoutStartSec", strconv.FormatUint(createOpts.TimeoutStartSec, 10)},
-		&unit.UnitOption{"Service", "TimeoutStopSec", strconv.FormatUint(createOpts.TimeoutStopSec, 10)},
+		&unit.UnitOption{"Service", "RestartSec", createOpts.RestartSec},
+		&unit.UnitOption{"Service", "TimeoutStartSec", createOpts.TimeoutStartSec},
+		&unit.UnitOption{"Service", "TimeoutStopSec", createOpts.TimeoutStopSec},
 
 		&unit.UnitOption{"Install", "WantedBy", createOpts.WantedBy},
 	}
@@ -227,9 +226,9 @@ func init() {
 	createCmd.PersistentFlags().StringVarP(&createOpts.Group, "group", "g", "root", "Group to run service as")
 
 	createCmd.PersistentFlags().StringVarP(&createOpts.Restart, "restart", "r", "on-failure", "When to restart (no, always, on-success, on-failure, on-abnormal, on-abort or on-watchdog)")
-	createCmd.PersistentFlags().Uint64VarP(&createOpts.RestartSec, "restartsec", "s", 5, "How many seconds between restarts")
-	createCmd.PersistentFlags().Uint64Var(&createOpts.TimeoutStartSec, "timeoutstartsec", 0, "How many seconds to wait for a startup")
-	createCmd.PersistentFlags().Uint64Var(&createOpts.TimeoutStopSec, "timeoutstopsec", 0, "How many seconds to wait when stoping a service")
+	createCmd.PersistentFlags().StringVarP(&createOpts.RestartSec, "restartsec", "s", "", "How many seconds between restarts")
+	createCmd.PersistentFlags().StringVar(&createOpts.TimeoutStartSec, "timeoutstartsec", "", "How many seconds to wait for a startup")
+	createCmd.PersistentFlags().StringVar(&createOpts.TimeoutStopSec, "timeoutstopsec", "", "How many seconds to wait when stoping a service")
 
 	createCmd.PersistentFlags().StringVarP(&createOpts.After, "after", "a", "", "Target after which the service will be started")
 	createCmd.PersistentFlags().StringVarP(&createOpts.WantedBy, "wantedby", "b", "", "This service is wanted by this target")
