@@ -187,7 +187,7 @@ func executeCreate() error {
 		&unit.UnitOption{"Install", "WantedBy", createOpts.WantedBy},
 	}
 
-	r := unit.Serialize(u)
+	r := unit.Serialize(stripEmptyOptions(u))
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
 		return fmt.Errorf("Encountered error while reading output: %v", err)
