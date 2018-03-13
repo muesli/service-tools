@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/coreos/go-systemd/unit"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +41,17 @@ func (s Strings) Contains(n string) bool {
 	}
 
 	return false
+}
+
+func stripEmptyOptions(options []*unit.UnitOption) []*unit.UnitOption {
+	var opts []*unit.UnitOption
+	for _, opt := range options {
+		if len(opt.Value) > 0 {
+			opts = append(opts, opt)
+		}
+	}
+
+	return opts
 }
 
 func readString(prompt string, required bool) (string, error) {
