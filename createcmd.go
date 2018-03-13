@@ -76,47 +76,47 @@ var (
 
 				validate()
 				return executeCreate()
-			} else {
-				app := tview.NewApplication()
-				form := tview.NewForm().
-					AddInputField("Exec", createOpts.Exec, 40, nil, func(s string) {
-						createOpts.Exec = s
-					}).
-					AddInputField("Description", createOpts.Description, 40, nil, func(s string) {
-						createOpts.Description = s
-					}).
-					AddDropDown("Type", types, types.IndexOf(createOpts.Type), func(s string, i int) {
-						createOpts.Type = s
-					}).
-					AddDropDown("Restarts", restarts, restarts.IndexOf(createOpts.Restart), func(s string, i int) {
-						createOpts.Restart = s
-					}).
-					AddDropDown("Start After", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.After), func(s string, i int) {
-						createOpts.After = s
-					}).
-					AddDropDown("Wanted By", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.WantedBy), func(s string, i int) {
-						createOpts.WantedBy = s
-					})
-
-				form.
-					AddButton("Create", func() {
-						app.Stop()
-						if err := validate(); err != nil {
-							panic(err)
-						}
-						executeCreate()
-					}).
-					AddButton("Cancel", func() {
-						app.Stop()
-					})
-
-				form.SetBorder(true).SetTitle("Create new service").SetTitleAlign(tview.AlignCenter)
-				if err := app.SetRoot(form, true).Run(); err != nil {
-					return err
-				}
 			}
+			app := tview.NewApplication()
+			form := tview.NewForm().
+				AddInputField("Exec", createOpts.Exec, 40, nil, func(s string) {
+					createOpts.Exec = s
+				}).
+				AddInputField("Description", createOpts.Description, 40, nil, func(s string) {
+					createOpts.Description = s
+				}).
+				AddDropDown("Type", types, types.IndexOf(createOpts.Type), func(s string, i int) {
+					createOpts.Type = s
+				}).
+				AddDropDown("Restarts", restarts, restarts.IndexOf(createOpts.Restart), func(s string, i int) {
+					createOpts.Restart = s
+				}).
+				AddDropDown("Start After", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.After), func(s string, i int) {
+					createOpts.After = s
+				}).
+				AddDropDown("Wanted By", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.WantedBy), func(s string, i int) {
+					createOpts.WantedBy = s
+				})
 
-			return nil
+			var apperr error
+			form.
+				AddButton("Create", func() {
+					app.Stop()
+					if err := validate(); err != nil {
+						apperr = err
+					} else {
+						executeCreate()
+					}
+				}).
+				AddButton("Cancel", func() {
+					app.Stop()
+				})
+
+			form.SetBorder(true).SetTitle("Create new service").SetTitleAlign(tview.AlignCenter)
+			if err := app.SetRoot(form, true).Run(); err != nil {
+				return err
+			}
+			return apperr
 		},
 	}
 )
