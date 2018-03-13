@@ -11,14 +11,14 @@ A tool to generate systemd Unit files (newthing.service)
 To generate a new service file non-interactively simply call:
 
 ```
-$ service-generator /path/to/executable "Some description"
+$ service-generator create /path/to/executable "Some description"
 ```
 
 If you prefer a terminal UI, you can launch it with just an executable or no
 arguments at all:
 
 ```
-$ service-generator /path/to/executable
+$ service-generator create
 ```
 
 See `--help` for all commands and options.
