@@ -43,7 +43,7 @@ var (
 	restarts   = Strings{"no", "always", "on-success", "on-failure", "on-abnormal", "on-abort", "on-watchdog"}
 
 	createCmd = &cobra.Command{
-		Use:   "create <executable> <description> <after> <wanted-by>",
+		Use:   "create <executable> <description> [after] [wanted-by]",
 		Short: "creates a new Unit file",
 		Long:  `The create command creates a new systemd Unit file`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,19 +61,24 @@ var (
 				return fmt.Errorf("No such restart type: %s", createOpts.Restart)
 			}
 
-			if len(args) >= 1 {
+			switch len(args) {
+			case 4:
+				createOpts.WantedBy = args[3]
+				fallthrough
+			case 3:
+				createOpts.After = args[2]
+				fallthrough
+			case 2:
+				createOpts.Description = args[1]
+				fallthrough
+			case 1:
 				createOpts.Exec = args[0]
 			}
-			if len(args) >= 2 {
-				createOpts.Description = args[1]
-			}
-			if len(args) >= 3 {
-				createOpts.After = args[2]
-			}
-			if len(args) >= 4 {
-				createOpts.WantedBy = args[3]
 
-				validate()
+			if len(args) >= 2 {
+				if err := validate(); err != nil {
+					return err
+				}
 				return executeCreate()
 			}
 			app := tview.NewApplication()
