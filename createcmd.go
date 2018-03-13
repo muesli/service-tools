@@ -79,22 +79,28 @@ var (
 			}
 			app := tview.NewApplication()
 			form := tview.NewForm().
-				AddInputField("Exec", createOpts.Exec, 40, nil, func(s string) {
-					createOpts.Exec = s
-				}).
-				AddInputField("Description", createOpts.Description, 40, nil, func(s string) {
+				AddInputField("Description:", createOpts.Description, 40, nil, func(s string) {
 					createOpts.Description = s
 				}).
-				AddDropDown("Type", types, types.IndexOf(createOpts.Type), func(s string, i int) {
+				AddDropDown("Type:", types, types.IndexOf(createOpts.Type), func(s string, i int) {
 					createOpts.Type = s
 				}).
-				AddDropDown("Restarts", restarts, restarts.IndexOf(createOpts.Restart), func(s string, i int) {
+				AddInputField("Exec on start:", createOpts.Exec, 40, nil, func(s string) {
+					createOpts.Exec = s
+				}).
+				AddInputField("Exec on stop:", createOpts.ExecStop, 40, nil, func(s string) {
+					createOpts.ExecStop = s
+				}).
+				AddInputField("Exec on reload:", createOpts.ExecReload, 40, nil, func(s string) {
+					createOpts.ExecReload = s
+				}).
+				AddDropDown("Restarts on:", restarts, restarts.IndexOf(createOpts.Restart), func(s string, i int) {
 					createOpts.Restart = s
 				}).
-				AddDropDown("Start After", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.After), func(s string, i int) {
+				AddDropDown("Start after target:", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.After), func(s string, i int) {
 					createOpts.After = s
 				}).
-				AddDropDown("Wanted By", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.WantedBy), func(s string, i int) {
+				AddDropDown("Wanted by target:", ts.Strings(), Strings(ts.Strings()).IndexOf(createOpts.WantedBy), func(s string, i int) {
 					createOpts.WantedBy = s
 				})
 
