@@ -134,6 +134,9 @@ func validate() error {
 	}
 
 	// Exec check
+	if len(strings.TrimSpace(createOpts.Exec)) == 0 {
+		return fmt.Errorf("Need an executable to create a service for")
+	}
 	stat, err := os.Stat(createOpts.Exec)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("Could not find executable: %s is not a file", createOpts.Exec)
