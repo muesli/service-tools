@@ -153,17 +153,11 @@ func validate() error {
 		return fmt.Errorf("Description for this service can't be empty")
 	}
 
-	if len(createOpts.After) == 0 {
-		return fmt.Errorf("create needs a target after which this service will be started")
-	}
-	if !ts.Contains(createOpts.After) {
+	// Target checks
+	if len(createOpts.After) > 0 && !ts.Contains(createOpts.After) {
 		return fmt.Errorf("Could not create service: no such target")
 	}
-
-	if len(createOpts.WantedBy) == 0 {
-		return fmt.Errorf("create needs a target which this service will be wanted by")
-	}
-	if !ts.Contains(createOpts.WantedBy) {
+	if len(createOpts.WantedBy) > 0 && !ts.Contains(createOpts.WantedBy) {
 		return fmt.Errorf("Could not create service: no such target")
 	}
 
