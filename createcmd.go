@@ -82,16 +82,26 @@ var (
 				return executeCreate()
 			}
 			app := tview.NewApplication()
-			form := tview.NewForm().
-				AddInputField("Description:", createOpts.Description, 40, nil, func(s string) {
+			form := tview.NewForm()
+
+			descriptionField := tview.NewInputField().
+				SetLabel("Description:").
+				SetText(createOpts.Description).
+				SetFieldWidth(40).
+				SetAcceptanceFunc(nil).
+				SetChangedFunc(func(s string) {
 					createOpts.Description = s
-				}).
+				})
+
+			form.
 				AddDropDown("Type:", types, types.IndexOf(createOpts.Type), func(s string, i int) {
 					createOpts.Type = s
 				}).
 				AddInputField("Exec on start:", createOpts.Exec, 40, nil, func(s string) {
 					createOpts.Exec = s
+					descriptionField.SetText(fmt.Sprintf("%s service", filepath.Base(createOpts.Exec)))
 				}).
+				AddFormItem(descriptionField).
 				AddInputField("Exec on stop:", createOpts.ExecStop, 40, nil, func(s string) {
 					createOpts.ExecStop = s
 				}).
