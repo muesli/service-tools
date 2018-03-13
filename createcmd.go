@@ -141,25 +141,58 @@ var (
 	}
 )
 
+func validateExecutables(executable string, allowEmpty bool) (string, error) {
+	executable = strings.TrimSpace(executable)
+	if len(executable) == 0 {
+		if allowEmpty {
+			return executable, nil
+		}
+		return executable, fmt.Errorf("Need an executable to create a service for")
+	}
+	stat, err := os.Stat(executable)
+	if os.IsNotExist(err) {
+		return executable, fmt.Errorf("Could not find executable: %s is not a file", executable)
+	}
+	if stat.IsDir() {
+		return executable, fmt.Errorf("Could not find executable: %s is a directory", executable)
+	}
+	if stat.Mode()&0111 == 0 {
+		return executable, fmt.Errorf("%s is not executable", executable)
+	}
+
+	return executable, nil
+}
+
 func validate() error {
 	ts, err := targets()
 	if err != nil {
 		return fmt.Errorf("Can't find systemd targets: %s", err)
 	}
 
-	// Exec check
-	if len(strings.TrimSpace(createOpts.Exec)) == 0 {
-		return fmt.Errorf("Need an executable to create a service for")
+	// Executable checks
+	createOpts.Exec, err = validateExecutables(createOpts.Exec, false)
+	if err != nil {
+		return err
 	}
-	stat, err := os.Stat(createOpts.Exec)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("Could not find executable: %s is not a file", createOpts.Exec)
+	createOpts.ExecReload, err = validateExecutables(createOpts.ExecReload, true)
+	if err != nil {
+		return err
 	}
-	if stat.IsDir() {
-		return fmt.Errorf("Could not find executable: %s is a directory", createOpts.Exec)
+	createOpts.ExecStartPre, err = validateExecutables(createOpts.ExecStartPre, true)
+	if err != nil {
+		return err
 	}
-	if stat.Mode()&0111 == 0 {
-		return fmt.Errorf("%s is not executable", createOpts.Exec)
+	createOpts.ExecStartPost, err = validateExecutables(createOpts.ExecStartPost, true)
+	if err != nil {
+		return err
+	}
+	createOpts.ExecStop, err = validateExecutables(createOpts.ExecStop, true)
+	if err != nil {
+		return err
+	}
+	createOpts.ExecStopPost, err = validateExecutables(createOpts.ExecStopPost, true)
+	if err != nil {
+		return err
 	}
 
 	// Description check
