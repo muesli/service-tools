@@ -21,4 +21,12 @@ arguments at all:
 $ service-generator create
 ```
 
+### service-monitor
+
+A monitor for systemd Units
+
+```
+$ service-monitor logs
+```
+
 See `--help` for all commands and options.
