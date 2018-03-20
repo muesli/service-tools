@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
 )
 
@@ -14,6 +15,9 @@ var (
 		SilenceErrors: false,
 		SilenceUsage:  true,
 	}
+
+	apperr error
+	app    = tview.NewApplication()
 )
 
 func main() {
