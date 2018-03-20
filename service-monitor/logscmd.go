@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
-	"strings"
 	"time"
 
 	"github.com/coreos/go-systemd/sdjournal"
@@ -17,6 +14,16 @@ type LogModel struct {
 	Name        string
 	Description string
 	Matches     []sdjournal.Match
+}
+
+type LogPipe struct {
+	Chan   chan []byte
+	Cancel chan time.Time
+}
+
+func (lmw *LogPipe) Write(p []byte) (n int, err error) {
+	lmw.Chan <- p
+	return len(p), nil
 }
 
 var (
@@ -57,6 +64,16 @@ var (
 						{
 							Field: sdjournal.SD_JOURNAL_FIELD_PRIORITY,
 							Value: "4",
+						},
+					},
+				},
+				{
+					Name:        "Kernel",
+					Description: "Kernel log",
+					Matches: []sdjournal.Match{
+						{
+							Field: sdjournal.SD_JOURNAL_FIELD_SYSLOG_IDENTIFIER,
+							Value: "kernel",
 						},
 					},
 				},
@@ -114,36 +131,26 @@ var (
 				SetBorder(true).
 				SetTitle("Global Error Log")
 
-			r := readLog([]sdjournal.Match{})
-			errReader := readLog([]sdjournal.Match{
+			errReader := logPipe([]sdjournal.Match{
 				{
 					Field: sdjournal.SD_JOURNAL_FIELD_PRIORITY,
 					Value: "3",
 				},
 			})
+			go pipeReader(errReader, errLogView)
 
-			go func() {
-				buf, _ := ioutil.ReadAll(errReader)
-				errLogView.SetText(string(buf))
-				errLogView.ScrollToEnd()
-				for {
-					line, err := errReader.ReadString('\n')
-					if err != nil {
-						return
-					}
-					errLogView.SetText(strings.TrimSpace(line))
-					errLogView.ScrollToEnd()
-				}
-			}()
-
+			var mainReader *LogPipe
 			list.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
 				u := model[index]
 				textView.Clear()
 				textView.SetTitle(u.Name)
-				r = readLog(u.Matches)
-				buf, _ := ioutil.ReadAll(r)
-				textView.SetText(string(buf))
-				textView.ScrollToEnd()
+
+				if mainReader != nil {
+					mainReader.Cancel <- time.Now()
+				}
+				mainReader = logPipe(u.Matches)
+				go pipeReader(mainReader, textView)
+
 				app.SetFocus(textView)
 			})
 
@@ -165,32 +172,84 @@ var (
 	}
 )
 
-func readLog(matches []sdjournal.Match) *bytes.Buffer {
-	r, err := sdjournal.NewJournalReader(sdjournal.JournalReaderConfig{
-		Since:   time.Duration(-60) * time.Minute * 24,
-		Matches: matches,
-	})
+func pipeReader(r *LogPipe, textView *tview.TextView) {
+	for {
+		var buf []byte
+		done := false
 
-	if err != nil {
-		panic(err)
+		for !done {
+			select {
+			case l, ok := <-r.Chan:
+				if !ok {
+					return
+				}
+				buf = append(buf, l...)
+			default:
+				done = true
+				break
+			}
+			time.Sleep(500 * time.Microsecond)
+		}
+
+		if len(buf) > 0 {
+			textView.Write(buf)
+			textView.ScrollToEnd()
+		}
+
+		time.Sleep(100 * time.Millisecond)
 	}
-	if r == nil {
-		panic("journal reader is nil")
+}
+
+func logPipe(matches []sdjournal.Match) *LogPipe {
+	lp := LogPipe{
+		Chan:   make(chan []byte),
+		Cancel: make(chan time.Time),
 	}
 
-	defer r.Close()
-	// r.Rewind()
+	go func() {
+		r, err := sdjournal.NewJournalReader(sdjournal.JournalReaderConfig{
+			Since:   time.Duration(-12) * time.Hour,
+			Matches: matches,
+			Formatter: func(entry *sdjournal.JournalEntry) (string, error) {
+				color := "gray"
+				switch entry.Fields["PRIORITY"] {
+				case "0":
+					fallthrough
+				case "1":
+					fallthrough
+				case "2":
+					fallthrough
+				case "3":
+					color = "red"
+				case "4":
+					color = "darkred"
+				case "5":
+					color = "silver"
+				}
+				return fmt.Sprintf("[green]%s [blue]%s [%s]%s\n",
+					time.Unix(0, int64(entry.RealtimeTimestamp)*int64(time.Microsecond)).Format("Jan 02 15:04:05"),
+					entry.Fields["SYSLOG_IDENTIFIER"],
+					color,
+					entry.Fields["MESSAGE"]), nil
+			},
+		})
 
-	b := []byte{}
-	buf := bytes.NewBuffer(b)
+		if err != nil {
+			panic(err)
+		}
+		if r == nil {
+			panic("journal reader is nil")
+		}
+		defer r.Close()
+		defer close(lp.Chan)
 
-	// and follow the reader synchronously
-	timeout := time.Duration(1) * time.Second
-	if err = r.Follow(time.After(timeout), buf); err != sdjournal.ErrExpired {
-		panic(err)
-	}
+		// and follow the reader synchronously
+		if err = r.Follow(lp.Cancel, &lp); err != sdjournal.ErrExpired {
+			panic(err)
+		}
+	}()
 
-	return buf
+	return &lp
 }
 
 func init() {
