@@ -25,6 +25,8 @@ $ service-generator create
 
 A monitor for systemd Units
 
+![service-monitor screenshot](screenshots/service-monitor.png)
+
 ```
 $ service-monitor logs
 ```
