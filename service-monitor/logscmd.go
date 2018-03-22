@@ -21,8 +21,8 @@ type LogPipe struct {
 	Cancel chan time.Time
 }
 
-func (lmw *LogPipe) Write(p []byte) (n int, err error) {
-	lmw.Chan <- p
+func (lp *LogPipe) Write(p []byte) (n int, err error) {
+	lp.Chan <- p
 	return len(p), nil
 }
 
@@ -44,6 +44,29 @@ var (
 		},
 	}
 )
+
+func logFormatter(entry *sdjournal.JournalEntry) (string, error) {
+	color := "gray"
+	switch entry.Fields["PRIORITY"] {
+	case "0":
+		fallthrough
+	case "1":
+		fallthrough
+	case "2":
+		fallthrough
+	case "3":
+		color = "red"
+	case "4":
+		color = "darkred"
+	case "5":
+		color = "silver"
+	}
+	return fmt.Sprintf("[green]%s [blue]%s [%s]%s\n",
+		time.Unix(0, int64(entry.RealtimeTimestamp)*int64(time.Microsecond)).Format("Jan 02 15:04:05"),
+		entry.Fields["SYSLOG_IDENTIFIER"],
+		color,
+		entry.Fields["MESSAGE"]), nil
+}
 
 func logsModel() ([]LogModel, error) {
 	ts, err := services()
@@ -236,30 +259,9 @@ func logPipe(matches []sdjournal.Match) *LogPipe {
 
 	go func() {
 		r, err := sdjournal.NewJournalReader(sdjournal.JournalReaderConfig{
-			Since:   time.Duration(-12) * time.Hour,
-			Matches: matches,
-			Formatter: func(entry *sdjournal.JournalEntry) (string, error) {
-				color := "gray"
-				switch entry.Fields["PRIORITY"] {
-				case "0":
-					fallthrough
-				case "1":
-					fallthrough
-				case "2":
-					fallthrough
-				case "3":
-					color = "red"
-				case "4":
-					color = "darkred"
-				case "5":
-					color = "silver"
-				}
-				return fmt.Sprintf("[green]%s [blue]%s [%s]%s\n",
-					time.Unix(0, int64(entry.RealtimeTimestamp)*int64(time.Microsecond)).Format("Jan 02 15:04:05"),
-					entry.Fields["SYSLOG_IDENTIFIER"],
-					color,
-					entry.Fields["MESSAGE"]), nil
-			},
+			Since:     time.Duration(-12) * time.Hour,
+			Matches:   matches,
+			Formatter: logFormatter,
 		})
 
 		if err != nil {
