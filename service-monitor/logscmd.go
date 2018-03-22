@@ -220,7 +220,43 @@ func logsForm() (tview.Primitive, error) {
 			AddItem(logView, 0, 8, false).
 			AddItem(errLogView, 8, 1, false), 0, 1, false)
 
-	return flex, nil
+	info := tview.NewTextView().
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetWrap(false)
+
+	fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "Log-level")
+
+	logLevelDropDown := tview.NewList()
+
+	pages := tview.NewPages()
+	pages.AddPage("flex", flex, true, true)
+	pages.AddPage("dropdown_loglevel", logLevelDropDown, false, false)
+
+	logLevelDropDown.AddItem("Emergency", "Only Emergencies", 0, nil).
+		AddItem("Error", "Errors or worse", 0, nil).
+		AddItem("Warning", "Warnings or worse", 0, nil)
+	logLevelDropDown.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
+		pages.HidePage("dropdown_loglevel")
+	})
+
+	// Shortcuts to navigate the slides.
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyF1:
+			pages.ShowPage("dropdown_loglevel")
+		}
+
+		return event
+	})
+
+	// Create the main layout.
+	layout := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(pages, 0, 1, true).
+		AddItem(info, 1, 1, false)
+
+	return layout, nil
 }
 
 func pipeReader(r *LogPipe, textView *tview.TextView) {
