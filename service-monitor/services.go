@@ -29,6 +29,19 @@ func services() (Services, error) {
 	return res, nil
 }
 
+func (ts Services) ActiveOnly() Services {
+	res := Services{}
+	for _, t := range ts {
+		if t.ActiveState != "active" {
+			continue
+		}
+
+		res = append(res, t)
+	}
+
+	return res
+}
+
 func (ts Services) Contains(name string) bool {
 	for _, t := range ts {
 		if t.Name == name {
