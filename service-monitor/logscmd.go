@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/coreos/go-systemd/sdjournal"
@@ -9,22 +10,6 @@ import (
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
 )
-
-type LogModel struct {
-	Name        string
-	Description string
-	Matches     []sdjournal.Match
-}
-
-type LogPipe struct {
-	Chan   chan []byte
-	Cancel chan time.Time
-}
-
-func (lp *LogPipe) Write(p []byte) (n int, err error) {
-	lp.Chan <- p
-	return len(p), nil
-}
 
 var (
 	logsCmd = &cobra.Command{
@@ -43,103 +28,21 @@ var (
 			return apperr
 		},
 	}
+
+	mainReader *LogPipe
+	logView    *tview.TextView
+	info       *tview.TextView
+	model      []ServiceItem
+	filter     = logLevelFilter(6)
+	activeOnly = true
+	search     string
 )
 
-func logFormatter(entry *sdjournal.JournalEntry) (string, error) {
-	color := "gray"
-	switch entry.Fields["PRIORITY"] {
-	case "0":
-		fallthrough
-	case "1":
-		fallthrough
-	case "2":
-		fallthrough
-	case "3":
-		color = "red"
-	case "4":
-		color = "darkred"
-	case "5":
-		color = "silver"
-	}
-	return fmt.Sprintf("[green]%s [blue]%s [%s]%s\n",
-		time.Unix(0, int64(entry.RealtimeTimestamp)*int64(time.Microsecond)).Format("Jan 02 15:04:05"),
-		entry.Fields["SYSLOG_IDENTIFIER"],
-		color,
-		entry.Fields["MESSAGE"]), nil
-}
-
-func logsModel() ([]LogModel, error) {
-	ts, err := services()
-	if err != nil {
-		return []LogModel{}, fmt.Errorf("Can't find systemd services: %s", err)
-	}
-
-	model := []LogModel{
-		{
-			Name:        "All",
-			Description: "Everything in the log",
-			Matches:     []sdjournal.Match{},
-		},
-		{
-			Name:        "All Errors",
-			Description: "All errors in the log",
-			Matches: []sdjournal.Match{
-				{
-					Field: sdjournal.SD_JOURNAL_FIELD_PRIORITY,
-					Value: "3",
-				},
-			},
-		},
-		{
-			Name:        "All Warnigns",
-			Description: "All warnings in the log",
-			Matches: []sdjournal.Match{
-				{
-					Field: sdjournal.SD_JOURNAL_FIELD_PRIORITY,
-					Value: "3",
-				},
-				{
-					Field: sdjournal.SD_JOURNAL_FIELD_PRIORITY,
-					Value: "4",
-				},
-			},
-		},
-		{
-			Name:        "Kernel",
-			Description: "Kernel log",
-			Matches: []sdjournal.Match{
-				{
-					Field: sdjournal.SD_JOURNAL_FIELD_SYSLOG_IDENTIFIER,
-					Value: "kernel",
-				},
-			},
-		},
-	}
-	for _, service := range ts {
-		model = append(model, LogModel{
-			Name:        service.Name,
-			Description: service.Description,
-			Matches: []sdjournal.Match{
-				{
-					Field: sdjournal.SD_JOURNAL_FIELD_SYSTEMD_UNIT,
-					Value: service.Name,
-				},
-			},
-		})
-	}
-
-	return model, nil
-}
-
 func logsForm() (tview.Primitive, error) {
-	model, err := logsModel()
-	if err != nil {
-		return nil, err
-	}
-
 	list := tview.NewList()
-	logView := tview.NewTextView()
+	logView = tview.NewTextView()
 	errLogView := tview.NewTextView()
+	errLogView.ScrollToEnd()
 
 	list.
 		SetBorder(true).
@@ -148,6 +51,11 @@ func logsForm() (tview.Primitive, error) {
 		SetDoneFunc(func() {
 			app.SetFocus(logView)
 		})
+
+	err := fillLogModel(list, activeOnly)
+	if err != nil {
+		return nil, err
+	}
 
 	logView.
 		SetDynamicColors(true).
@@ -167,7 +75,7 @@ func logsForm() (tview.Primitive, error) {
 		})
 	logView.
 		SetBorder(true).
-		SetTitle("Service Log")
+		SetTitle("Log")
 
 	errLogView.
 		SetDynamicColors(true).
@@ -195,24 +103,9 @@ func logsForm() (tview.Primitive, error) {
 	})
 	go pipeReader(errReader, errLogView)
 
-	var mainReader *LogPipe
 	list.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
-		u := model[index]
-		logView.Clear()
-		logView.SetTitle(u.Name)
-
-		if mainReader != nil {
-			mainReader.Cancel <- time.Now()
-		}
-		mainReader = logPipe(u.Matches)
-		go pipeReader(mainReader, logView)
-
-		app.SetFocus(logView)
+		selectLog(model[index])
 	})
-
-	for _, srv := range model {
-		list.AddItem(srv.Name, srv.Description, 0, nil)
-	}
 
 	flex := tview.NewFlex().
 		AddItem(list, 32, 1, true).
@@ -220,31 +113,71 @@ func logsForm() (tview.Primitive, error) {
 			AddItem(logView, 0, 8, false).
 			AddItem(errLogView, 8, 1, false), 0, 1, false)
 
-	info := tview.NewTextView().
+	info = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWrap(false)
-
-	fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "Log-level")
+	updateMenu()
 
 	logLevelDropDown := tview.NewList()
+	logLevelDropDown.
+		SetBorder(true).
+		SetTitle("Log-level")
+	logLevelDialog := tview.NewFlex().
+		AddItem(tview.NewBox(), 0, 1, false).
+		AddItem(tview.NewFlex().
+			SetDirection(tview.FlexRow).
+			AddItem(tview.NewBox(), 0, 1, false).
+			AddItem(logLevelDropDown, 18, 1, true).
+			AddItem(tview.NewBox(), 0, 1, false), 30, 1, true).
+		AddItem(tview.NewBox(), 0, 1, false)
 
 	pages := tview.NewPages()
 	pages.AddPage("flex", flex, true, true)
-	pages.AddPage("dropdown_loglevel", logLevelDropDown, false, false)
+	pages.AddPage("dropdown_loglevel", logLevelDialog, true, false)
+
+	menuPages := tview.NewPages()
+	searchInput := tview.NewInputField()
+	searchInput.
+		SetLabel("Search for: ").
+		SetFieldWidth(40).
+		SetAcceptanceFunc(nil).
+		SetDoneFunc(func(key tcell.Key) {
+			search = searchInput.GetText()
+			selectLog(model[list.GetCurrentItem()])
+			updateMenu()
+			menuPages.HidePage("search")
+		})
+
+	menuPages.AddPage("menu", info, true, true)
+	menuPages.AddPage("search", searchInput, true, false)
 
 	logLevelDropDown.AddItem("Emergency", "Only Emergencies", 0, nil).
+		AddItem("Alert", "Alerts or worse", 0, nil).
+		AddItem("Critical", "Critical or worse", 0, nil).
 		AddItem("Error", "Errors or worse", 0, nil).
-		AddItem("Warning", "Warnings or worse", 0, nil)
+		AddItem("Warning", "Warnings or worse", 0, nil).
+		AddItem("Notice", "Notice or worse", 0, nil).
+		AddItem("Informational", "Informational or worse", 0, nil).
+		AddItem("Debug", "Debug or worse", 0, nil)
 	logLevelDropDown.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
+		filter = logLevelFilter(index)
 		pages.HidePage("dropdown_loglevel")
+		selectLog(model[list.GetCurrentItem()])
 	})
 
-	// Shortcuts to navigate the slides.
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyF1:
+			activeOnly = !activeOnly
+			fillLogModel(list, activeOnly)
+			updateMenu()
+			app.SetFocus(list)
+		case tcell.KeyF2:
 			pages.ShowPage("dropdown_loglevel")
+		case tcell.KeyF3:
+			menuPages.ShowPage("search")
+			app.SetFocus(searchInput)
 		}
 
 		return event
@@ -254,68 +187,79 @@ func logsForm() (tview.Primitive, error) {
 	layout := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(pages, 0, 1, true).
-		AddItem(info, 1, 1, false)
+		AddItem(menuPages, 1, 1, false)
+
+	selectLog(model[0])
 
 	return layout, nil
 }
 
-func pipeReader(r *LogPipe, textView *tview.TextView) {
-	for {
-		var buf []byte
-		done := false
+func logLevelFilter(index int) []sdjournal.Match {
+	f := []sdjournal.Match{}
 
-		for !done {
-			select {
-			case l, ok := <-r.Chan:
-				if !ok {
-					return
-				}
-				buf = append(buf, l...)
-			default:
-				done = true
-				break
-			}
-			time.Sleep(500 * time.Microsecond)
-		}
-
-		if len(buf) > 0 {
-			textView.Write(buf)
-			textView.ScrollToEnd()
-		}
-
-		time.Sleep(100 * time.Millisecond)
+	for i := 0; i <= index; i++ {
+		f = append(f, sdjournal.Match{
+			Field: sdjournal.SD_JOURNAL_FIELD_PRIORITY,
+			Value: strconv.FormatInt(int64(i), 10),
+		})
 	}
+
+	return f
 }
 
-func logPipe(matches []sdjournal.Match) *LogPipe {
-	lp := LogPipe{
-		Chan:   make(chan []byte),
-		Cancel: make(chan time.Time),
+func fillLogModel(list *tview.List, activeOnly bool) error {
+	var err error
+	list.Clear()
+
+	if activeOnly {
+		list.SetTitle("Active Services")
+	} else {
+		list.SetTitle("All Services")
 	}
 
-	go func() {
-		r, err := sdjournal.NewJournalReader(sdjournal.JournalReaderConfig{
-			Since:     time.Duration(-12) * time.Hour,
-			Matches:   matches,
-			Formatter: logFormatter,
-		})
+	model, err = logsModel(activeOnly)
+	if err != nil {
+		return err
+	}
 
-		if err != nil {
-			panic(err)
-		}
-		if r == nil {
-			panic("journal reader is nil")
-		}
-		defer r.Close()
-		defer close(lp.Chan)
+	for _, srv := range model {
+		list.AddItem(srv.Name, srv.Description, 0, nil)
+	}
 
-		// and follow the reader synchronously
-		if err = r.Follow(lp.Cancel, &lp); err != sdjournal.ErrExpired {
-			panic(err)
-		}
-	}()
+	return nil
+}
 
-	return &lp
+func updateMenu() {
+	info.Clear()
+	if activeOnly {
+		fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "All Services")
+	} else {
+		fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "Active Services")
+	}
+
+	fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F2", 1, "Log-level")
+	fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F3", 2, "Filter")
+}
+
+func selectLog(log ServiceItem) {
+	// cancel previous reader
+	if mainReader != nil {
+		mainReader.Cancel <- time.Now()
+	}
+
+	logView.Clear()
+
+	title := log.Name
+	if len(search) > 0 {
+		title += fmt.Sprintf(" (filtered by %s)", search)
+	}
+	logView.SetTitle(title)
+	logView.ScrollToEnd()
+
+	mainReader = logPipe(log.Matches)
+	go pipeReader(mainReader, logView)
+
+	app.SetFocus(logView)
 }
 
 func init() {
