@@ -29,7 +29,7 @@ func servicesForm() (tview.Primitive, error) {
 	activeOnly := false
 
 	list := NewServicesView()
-	err := list.loadModel(activeOnly)
+	err := list.loadModel(false, activeOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func servicesForm() (tview.Primitive, error) {
 		} else {
 			menu.Items[0].Text = "All Services"
 		}
-		list.loadModel(activeOnly)
+		list.loadModel(false, activeOnly)
 		app.SetFocus(list)
 	})
 	menu.AddItem("Log-level", tcell.KeyF2, func() {

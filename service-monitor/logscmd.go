@@ -45,7 +45,7 @@ func logsForm() (tview.Primitive, error) {
 			app.SetFocus(logView)
 		})
 
-	err := list.loadModel(activeOnly)
+	err := list.loadModel(true, activeOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func logsForm() (tview.Primitive, error) {
 		} else {
 			menu.Items[0].Text = "All Services"
 		}
-		list.loadModel(activeOnly)
+		list.loadModel(true, activeOnly)
 		app.SetFocus(list)
 	})
 	menu.AddItem("Log-level", tcell.KeyF2, func() {

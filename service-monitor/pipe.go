@@ -35,9 +35,7 @@ func (lp *LogPipe) Write(p []byte) (n int, err error) {
 }
 
 func logPipe(matches []sdjournal.Match, filter []sdjournal.Match) *LogPipe {
-	for _, f := range filter {
-		matches = append(matches, f)
-	}
+	matches = append(matches, filter...)
 
 	lp := LogPipe{
 		Chan:   make(chan []byte, 1024),

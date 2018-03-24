@@ -24,7 +24,7 @@ func NewServicesView() *ServicesView {
 	return v
 }
 
-func (list *ServicesView) loadModel(activeOnly bool) error {
+func (list *ServicesView) loadModel(specialServices, activeOnly bool) error {
 	var err error
 	list.Clear()
 
@@ -34,7 +34,7 @@ func (list *ServicesView) loadModel(activeOnly bool) error {
 		list.SetTitle("All Services")
 	}
 
-	list.Model, err = serviceModel(activeOnly)
+	list.Model, err = serviceModel(specialServices, activeOnly)
 	if err != nil {
 		return err
 	}
