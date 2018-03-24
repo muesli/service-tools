@@ -14,6 +14,9 @@ var (
 		Long:          "service-monitor is a convenient little tool to monitor systemd Units",
 		SilenceErrors: false,
 		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return logsCmd.RunE(cmd, args)
+		},
 	}
 
 	apperr error
