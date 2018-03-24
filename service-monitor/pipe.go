@@ -34,7 +34,7 @@ func (lp *LogPipe) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func logPipe(matches []sdjournal.Match) *LogPipe {
+func logPipe(matches []sdjournal.Match, filter []sdjournal.Match) *LogPipe {
 	for _, f := range filter {
 		matches = append(matches, f)
 	}

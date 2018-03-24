@@ -28,31 +28,24 @@ var (
 			return apperr
 		},
 	}
-
-	mainReader *LogPipe
-	logView    *tview.TextView
-	menu       *tview.TextView
-	model      []ServiceItem
-	filter     = logLevelFilter(6)
-	activeOnly = true
-	search     string
 )
 
 func logsForm() (tview.Primitive, error) {
-	list := tview.NewList()
-	logView = tview.NewTextView()
+	var pipe *LogPipe
+	activeOnly := true
+	filter := logLevelFilter(6)
+
+	list := NewServicesView()
+	logView := tview.NewTextView()
 	errLogView := tview.NewTextView()
 	errLogView.ScrollToEnd()
 
-	list.
-		SetBorder(true).
-		SetTitle("Logs")
 	list.
 		SetDoneFunc(func() {
 			app.SetFocus(logView)
 		})
 
-	err := fillLogModel(list, activeOnly)
+	err := list.loadModel(activeOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -95,16 +88,11 @@ func logsForm() (tview.Primitive, error) {
 		SetBorder(true).
 		SetTitle("Global Error Log")
 
-	errReader := logPipe([]sdjournal.Match{
-		{
-			Field: sdjournal.SD_JOURNAL_FIELD_PRIORITY,
-			Value: "3",
-		},
-	})
+	errReader := logPipe([]sdjournal.Match{}, logLevelFilter(3))
 	go pipeReader(errReader, errLogView)
 
 	list.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
-		selectLog(model[index])
+		selectLog(pipe, list.Model[index], filter, logView)
 	})
 
 	flex := tview.NewFlex().
@@ -112,12 +100,6 @@ func logsForm() (tview.Primitive, error) {
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(logView, 0, 8, false).
 			AddItem(errLogView, 8, 1, false), 0, 1, false)
-
-	menu = tview.NewTextView().
-		SetDynamicColors(true).
-		SetRegions(true).
-		SetWrap(false)
-	updateMenu()
 
 	logLevelDropDown := tview.NewList()
 	logLevelDropDown.
@@ -144,8 +126,7 @@ func logsForm() (tview.Primitive, error) {
 		SetAcceptanceFunc(nil).
 		SetDoneFunc(func(key tcell.Key) {
 			search = searchInput.GetText()
-			selectLog(model[list.GetCurrentItem()])
-			updateMenu()
+			selectLog(pipe, list.Model[list.GetCurrentItem()], filter, logView)
 			menuPages.HidePage("search")
 		})
 
@@ -163,24 +144,25 @@ func logsForm() (tview.Primitive, error) {
 	logLevelDropDown.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
 		filter = logLevelFilter(index)
 		pages.HidePage("dropdown_loglevel")
-		selectLog(model[list.GetCurrentItem()])
+		selectLog(pipe, list.Model[list.GetCurrentItem()], filter, logView)
 	})
 
-	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyF1:
-			activeOnly = !activeOnly
-			fillLogModel(list, activeOnly)
-			updateMenu()
-			app.SetFocus(list)
-		case tcell.KeyF2:
-			pages.ShowPage("dropdown_loglevel")
-		case tcell.KeyF3:
-			menuPages.ShowPage("search")
-			app.SetFocus(searchInput)
+	menu.AddItem("Active Services", tcell.KeyF1, func() {
+		activeOnly = !activeOnly
+		if activeOnly {
+			menu.Items[0].Text = "Active Services"
+		} else {
+			menu.Items[0].Text = "All Services"
 		}
-
-		return event
+		list.loadModel(activeOnly)
+		app.SetFocus(list)
+	})
+	menu.AddItem("Log-level", tcell.KeyF2, func() {
+		pages.ShowPage("dropdown_loglevel")
+	})
+	menu.AddItem("Filter", tcell.KeyF3, func() {
+		menuPages.ShowPage("search")
+		app.SetFocus(searchInput)
 	})
 
 	// Create the main layout.
@@ -189,7 +171,7 @@ func logsForm() (tview.Primitive, error) {
 		AddItem(pages, 0, 1, true).
 		AddItem(menuPages, 1, 1, false)
 
-	selectLog(model[0])
+	selectLog(pipe, list.Model[0], filter, logView)
 
 	return layout, nil
 }
@@ -207,44 +189,10 @@ func logLevelFilter(index int) []sdjournal.Match {
 	return f
 }
 
-func fillLogModel(list *tview.List, activeOnly bool) error {
-	var err error
-	list.Clear()
-
-	if activeOnly {
-		list.SetTitle("Active Services")
-	} else {
-		list.SetTitle("All Services")
-	}
-
-	model, err = serviceModel(activeOnly)
-	if err != nil {
-		return err
-	}
-
-	for _, srv := range model {
-		list.AddItem(srv.Name, srv.Description, 0, nil)
-	}
-
-	return nil
-}
-
-func updateMenu() {
-	menu.Clear()
-	if activeOnly {
-		fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "All Services")
-	} else {
-		fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "Active Services")
-	}
-
-	fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F2", 1, "Log-level")
-	fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F3", 2, "Filter")
-}
-
-func selectLog(log ServiceItem) {
+func selectLog(pipe *LogPipe, log ServiceItem, filter []sdjournal.Match, logView *tview.TextView) {
 	// cancel previous reader
-	if mainReader != nil {
-		mainReader.Cancel <- time.Now()
+	if pipe != nil {
+		pipe.Cancel <- time.Now()
 	}
 
 	logView.Clear()
@@ -256,8 +204,8 @@ func selectLog(log ServiceItem) {
 	logView.SetTitle(title)
 	logView.ScrollToEnd()
 
-	mainReader = logPipe(log.Matches)
-	go pipeReader(mainReader, logView)
+	pipe = logPipe(log.Matches, filter)
+	go pipeReader(pipe, logView)
 
 	app.SetFocus(logView)
 }

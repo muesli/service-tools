@@ -21,6 +21,8 @@ var (
 
 	apperr error
 	app    = tview.NewApplication()
+	menu   = NewMenu(app)
+	search string
 )
 
 func main() {
