@@ -13,7 +13,7 @@ type ServiceItem struct {
 	Matches     []sdjournal.Match
 }
 
-func logsModel(activeOnly bool) ([]ServiceItem, error) {
+func serviceModel(activeOnly bool) ([]ServiceItem, error) {
 	ts, err := services()
 	if err != nil {
 		return []ServiceItem{}, fmt.Errorf("Can't find systemd services: %s", err)

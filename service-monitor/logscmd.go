@@ -31,7 +31,7 @@ var (
 
 	mainReader *LogPipe
 	logView    *tview.TextView
-	info       *tview.TextView
+	menu       *tview.TextView
 	model      []ServiceItem
 	filter     = logLevelFilter(6)
 	activeOnly = true
@@ -113,7 +113,7 @@ func logsForm() (tview.Primitive, error) {
 			AddItem(logView, 0, 8, false).
 			AddItem(errLogView, 8, 1, false), 0, 1, false)
 
-	info = tview.NewTextView().
+	menu = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWrap(false)
@@ -149,7 +149,7 @@ func logsForm() (tview.Primitive, error) {
 			menuPages.HidePage("search")
 		})
 
-	menuPages.AddPage("menu", info, true, true)
+	menuPages.AddPage("menu", menu, true, true)
 	menuPages.AddPage("search", searchInput, true, false)
 
 	logLevelDropDown.AddItem("Emergency", "Only Emergencies", 0, nil).
@@ -217,7 +217,7 @@ func fillLogModel(list *tview.List, activeOnly bool) error {
 		list.SetTitle("All Services")
 	}
 
-	model, err = logsModel(activeOnly)
+	model, err = serviceModel(activeOnly)
 	if err != nil {
 		return err
 	}
@@ -230,15 +230,15 @@ func fillLogModel(list *tview.List, activeOnly bool) error {
 }
 
 func updateMenu() {
-	info.Clear()
+	menu.Clear()
 	if activeOnly {
-		fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "All Services")
+		fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "All Services")
 	} else {
-		fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "Active Services")
+		fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F1", 0, "Active Services")
 	}
 
-	fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F2", 1, "Log-level")
-	fmt.Fprintf(info, `%s ["%d"][darkcyan]%s[white][""]  `, "F3", 2, "Filter")
+	fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F2", 1, "Log-level")
+	fmt.Fprintf(menu, `%s ["%d"][darkcyan]%s[white][""]  `, "F3", 2, "Filter")
 }
 
 func selectLog(log ServiceItem) {
