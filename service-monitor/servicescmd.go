@@ -73,6 +73,7 @@ func servicesForm() (tview.Primitive, error) {
 		SetDoneFunc(func(key tcell.Key) {
 			search = searchInput.GetText()
 			menuPages.HidePage("search")
+			app.SetFocus(list)
 		})
 
 	menu.AddItem("Active Services", tcell.KeyF1, func() {
