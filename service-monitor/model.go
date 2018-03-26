@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/coreos/go-systemd/sdjournal"
 )
@@ -23,7 +24,7 @@ func serviceModel(specialServices, activeOnly bool) ([]ServiceItem, error) {
 	}
 
 	sort.Slice(ts, func(i, j int) bool {
-		return ts[i].Name < ts[j].Name
+		return strings.ToLower(ts[i].Name) < strings.ToLower(ts[j].Name)
 	})
 
 	model := []ServiceItem{}
