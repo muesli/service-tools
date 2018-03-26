@@ -78,9 +78,9 @@ func servicesForm() (tview.Primitive, error) {
 	menu.AddItem("Active Services", tcell.KeyF1, func() {
 		activeOnly = !activeOnly
 		if activeOnly {
-			menu.Items[0].Text = "Active Services"
-		} else {
 			menu.Items[0].Text = "All Services"
+		} else {
+			menu.Items[0].Text = "Active Services"
 		}
 		list.loadModel(false, activeOnly)
 		app.SetFocus(list)

@@ -147,12 +147,12 @@ func logsForm() (tview.Primitive, error) {
 		selectLog(pipe, list.Model[list.GetCurrentItem()], filter, logView)
 	})
 
-	menu.AddItem("Active Services", tcell.KeyF1, func() {
+	menu.AddItem("All Services", tcell.KeyF1, func() {
 		activeOnly = !activeOnly
 		if activeOnly {
-			menu.Items[0].Text = "Active Services"
-		} else {
 			menu.Items[0].Text = "All Services"
+		} else {
+			menu.Items[0].Text = "Active Services"
 		}
 		list.loadModel(true, activeOnly)
 		app.SetFocus(list)
