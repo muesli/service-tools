@@ -1,6 +1,9 @@
 package main
 
 import (
+	"time"
+
+	"github.com/coreos/go-systemd/sdjournal"
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
@@ -26,7 +29,9 @@ var (
 )
 
 func servicesForm() (tview.Primitive, error) {
+	var pipe *LogPipe
 	activeOnly := false
+	filter := logLevelFilter(6)
 
 	list := NewServicesView()
 	err := list.loadModel(false, activeOnly)
@@ -34,28 +39,47 @@ func servicesForm() (tview.Primitive, error) {
 		return nil, err
 	}
 
-	serviceView := tview.NewTextView()
+	infoTable := tview.NewTable().
+		SetBorders(false)
+	infoTable.SetCell(0, 0, tview.NewTableCell("State:"))
+	infoTable.SetCell(1, 0, tview.NewTableCell("Description:"))
+	infoTable.SetCell(3, 0, tview.NewTableCell("Load Successful:"))
+	infoTable.SetCell(4, 0, tview.NewTableCell("SubState:"))
+
+	serviceView := tview.NewFlex().
+		SetDirection(tview.FlexRow)
 	serviceView.
+		SetBorder(true).
+		SetTitle("Service")
+
+	logView := tview.NewTextView()
+	list.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
+		app.SetFocus(logView)
+	})
+	list.SetChangedFunc(func(index int, primText, secText string, shortcut rune) {
+		pipe = selectService(pipe, list.Model[index], filter, logView, serviceView, infoTable)
+	})
+
+	logView.
 		SetDynamicColors(true).
 		SetScrollable(true).
 		SetChangedFunc(func() {
 			app.Draw()
 		}).
 		SetDoneFunc(func(key tcell.Key) {
-			var next tview.Primitive = list
-			app.SetFocus(next)
+			app.SetFocus(list)
 		})
-	serviceView.
+	logView.
 		SetBorder(true).
-		SetTitle("Service")
+		SetTitle("Log")
 
-	list.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
-		// selectLog(list.Model[index])
-	})
+	serviceView.
+		AddItem(infoTable, 0, 1, false).
+		AddItem(logView, 0, 4, false)
 
 	flex := tview.NewFlex().
-		AddItem(list, 0, 1, true).
-		AddItem(serviceView, 40, 1, false)
+		AddItem(list, 40, 1, true).
+		AddItem(serviceView, 0, 1, false)
 
 	pages := tview.NewPages()
 	pages.AddPage("flex", flex, true, true)
@@ -102,7 +126,36 @@ func servicesForm() (tview.Primitive, error) {
 		AddItem(pages, 0, 1, true).
 		AddItem(menuPages, 1, 1, false)
 
+	pipe = selectService(pipe, list.Model[0], filter, logView, serviceView, infoTable)
+
 	return layout, nil
+}
+
+func selectService(pipe *LogPipe, l ServiceItem, filter []sdjournal.Match, logView *tview.TextView, serviceView *tview.Flex, infoTable *tview.Table) *LogPipe {
+	u, err := service(l.Name)
+	if err != nil {
+		panic(err)
+	}
+
+	serviceView.SetTitle(u.Name)
+	infoTable.SetCell(0, 1, tview.NewTableCell(u.ActiveState))
+	infoTable.SetCell(1, 1, tview.NewTableCell(u.Description))
+	infoTable.SetCell(3, 1, tview.NewTableCell(u.LoadState))
+	infoTable.SetCell(4, 1, tview.NewTableCell(u.SubState))
+
+	// cancel previous reader
+	if pipe != nil {
+		pipe.Cancel <- time.Now()
+		pipe.WaitGroup.Wait()
+	}
+
+	logView.Clear()
+	logView.ScrollToEnd()
+
+	pipe = logPipe(l.Matches, filter)
+	go pipeReader(pipe, logView)
+
+	return pipe
 }
 
 func init() {
