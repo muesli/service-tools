@@ -92,7 +92,8 @@ func logsForm() (tview.Primitive, error) {
 	go pipeReader(errReader, errLogView)
 
 	list.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
-		selectLog(pipe, list.Model[index], filter, logView)
+		pipe = selectLog(pipe, list.Model[index], filter, logView)
+		app.SetFocus(logView)
 	})
 
 	flex := tview.NewFlex().
@@ -126,8 +127,9 @@ func logsForm() (tview.Primitive, error) {
 		SetAcceptanceFunc(nil).
 		SetDoneFunc(func(key tcell.Key) {
 			search = searchInput.GetText()
-			selectLog(pipe, list.Model[list.GetCurrentItem()], filter, logView)
 			menuPages.HidePage("search")
+			pipe = selectLog(pipe, list.Model[list.GetCurrentItem()], filter, logView)
+			app.SetFocus(logView)
 		})
 
 	menuPages.AddPage("menu", menu, true, true)
@@ -144,7 +146,7 @@ func logsForm() (tview.Primitive, error) {
 	logLevelDropDown.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
 		filter = logLevelFilter(index)
 		pages.HidePage("dropdown_loglevel")
-		selectLog(pipe, list.Model[list.GetCurrentItem()], filter, logView)
+		pipe = selectLog(pipe, list.Model[list.GetCurrentItem()], filter, logView)
 	})
 
 	menu.AddItem("All Services", tcell.KeyF1, func() {
@@ -171,7 +173,7 @@ func logsForm() (tview.Primitive, error) {
 		AddItem(pages, 0, 1, true).
 		AddItem(menuPages, 1, 1, false)
 
-	selectLog(pipe, list.Model[0], filter, logView)
+	pipe = selectLog(pipe, list.Model[0], filter, logView)
 
 	return layout, nil
 }
@@ -189,10 +191,11 @@ func logLevelFilter(index int) []sdjournal.Match {
 	return f
 }
 
-func selectLog(pipe *LogPipe, log ServiceItem, filter []sdjournal.Match, logView *tview.TextView) {
+func selectLog(pipe *LogPipe, log ServiceItem, filter []sdjournal.Match, logView *tview.TextView) *LogPipe {
 	// cancel previous reader
 	if pipe != nil {
 		pipe.Cancel <- time.Now()
+		pipe.WaitGroup.Wait()
 	}
 
 	logView.Clear()
@@ -207,7 +210,7 @@ func selectLog(pipe *LogPipe, log ServiceItem, filter []sdjournal.Match, logView
 	pipe = logPipe(log.Matches, filter)
 	go pipeReader(pipe, logView)
 
-	app.SetFocus(logView)
+	return pipe
 }
 
 func init() {
