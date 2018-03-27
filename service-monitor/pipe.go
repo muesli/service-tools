@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-systemd/sdjournal"
 )
 
 type LogPipe struct {
-	Chan   chan []byte
-	Cancel chan time.Time
+	Chan      chan []byte
+	Cancel    chan time.Time
+	WaitGroup sync.WaitGroup
 
 	buf []byte
 }
@@ -41,6 +43,7 @@ func logPipe(matches []sdjournal.Match, filter []sdjournal.Match) *LogPipe {
 		Chan:   make(chan []byte, 1024),
 		Cancel: make(chan time.Time),
 	}
+	lp.WaitGroup.Add(1)
 
 	go func() {
 		r, err := sdjournal.NewJournalReader(sdjournal.JournalReaderConfig{
@@ -56,13 +59,15 @@ func logPipe(matches []sdjournal.Match, filter []sdjournal.Match) *LogPipe {
 		if r == nil {
 			panic("journal reader is nil")
 		}
-		defer r.Close()
-		defer close(lp.Chan)
 
 		// and follow the reader synchronously
 		if err = r.Follow(lp.Cancel, &lp); err != sdjournal.ErrExpired {
 			panic(err)
 		}
+
+		r.Close()
+		close(lp.Chan)
+		lp.WaitGroup.Done()
 	}()
 
 	return &lp
