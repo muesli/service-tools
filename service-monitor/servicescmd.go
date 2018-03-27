@@ -34,6 +34,8 @@ func servicesForm() (tview.Primitive, error) {
 	activeOnly := false
 	filter := logLevelFilter(6)
 
+	pages := tview.NewPages()
+	confirmDialog := tview.NewModal()
 	list := NewServicesView()
 	err := list.loadModel(false, activeOnly)
 	if err != nil {
@@ -58,7 +60,7 @@ func servicesForm() (tview.Primitive, error) {
 		app.SetFocus(logView)
 	})
 	list.SetChangedFunc(func(index int, primText, secText string, shortcut rune) {
-		pipe = selectService(pipe, list.Model[index], filter, logView, serviceView, infoTable)
+		pipe = selectService(pipe, list.Model[index], filter, logView, serviceView, infoTable, confirmDialog)
 	})
 
 	logView.
@@ -95,9 +97,24 @@ func servicesForm() (tview.Primitive, error) {
 			AddItem(tview.NewBox(), 0, 1, false), 30, 1, true).
 		AddItem(tview.NewBox(), 0, 1, false)
 
-	pages := tview.NewPages()
+	confirmDialog.
+		SetText("Do you want to start the service?").
+		AddButtons([]string{"Yes", "No"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			pages.HidePage("confirm_dialog")
+			if buttonIndex == 0 {
+				err := toggleServiceState(list)
+				if err != nil {
+					panic(err)
+				}
+				updateServiceUI(list.Model[list.GetCurrentItem()].Name, serviceView, infoTable, confirmDialog)
+			}
+			app.SetFocus(list)
+		})
+
 	pages.AddPage("flex", flex, true, true)
 	pages.AddPage("dropdown_loglevel", logLevelDialog, true, false)
+	pages.AddPage("confirm_dialog", confirmDialog, false, false)
 
 	menuPages := tview.NewPages()
 	searchInput := tview.NewInputField()
@@ -108,7 +125,7 @@ func servicesForm() (tview.Primitive, error) {
 		SetDoneFunc(func(key tcell.Key) {
 			search = searchInput.GetText()
 			menuPages.HidePage("search")
-			pipe = selectService(pipe, list.Model[list.GetCurrentItem()], filter, logView, serviceView, infoTable)
+			pipe = selectService(pipe, list.Model[list.GetCurrentItem()], filter, logView, serviceView, infoTable, confirmDialog)
 			app.SetFocus(list)
 		})
 
@@ -126,7 +143,7 @@ func servicesForm() (tview.Primitive, error) {
 	logLevelDropDown.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
 		filter = logLevelFilter(index)
 		pages.HidePage("dropdown_loglevel")
-		pipe = selectService(pipe, list.Model[list.GetCurrentItem()], filter, logView, serviceView, infoTable)
+		pipe = selectService(pipe, list.Model[list.GetCurrentItem()], filter, logView, serviceView, infoTable, confirmDialog)
 	})
 
 	menu.AddItem("Active Services", tcell.KeyF1, func() {
@@ -147,6 +164,7 @@ func servicesForm() (tview.Primitive, error) {
 		app.SetFocus(searchInput)
 	})
 	menu.AddItem("Start Service", tcell.KeyF8, func() {
+		pages.ShowPage("confirm_dialog")
 	})
 
 	// Create the main layout.
@@ -155,15 +173,23 @@ func servicesForm() (tview.Primitive, error) {
 		AddItem(pages, 0, 1, true).
 		AddItem(menuPages, 1, 1, false)
 
-	pipe = selectService(pipe, list.Model[0], filter, logView, serviceView, infoTable)
+	pipe = selectService(pipe, list.Model[0], filter, logView, serviceView, infoTable, confirmDialog)
 
 	return layout, nil
 }
 
-func selectService(pipe *LogPipe, l ServiceItem, filter []sdjournal.Match, logView *tview.TextView, serviceView *tview.Flex, infoTable *tview.Table) *LogPipe {
-	u, err := service(l.Name)
+func updateServiceUI(name string, serviceView *tview.Flex, infoTable *tview.Table, confirmDialog *tview.Modal) {
+	u, err := service(name)
 	if err != nil {
 		panic(err)
+	}
+
+	if u.ActiveState == "active" {
+		menu.Items[3].Text = "Stop Service"
+		confirmDialog.SetText(fmt.Sprintf("Do you want to stop service %s?", u.Name))
+	} else {
+		menu.Items[3].Text = "Start Service"
+		confirmDialog.SetText(fmt.Sprintf("Do you want to start service %s?", u.Name))
 	}
 
 	serviceView.SetTitle(u.Name)
@@ -171,6 +197,10 @@ func selectService(pipe *LogPipe, l ServiceItem, filter []sdjournal.Match, logVi
 	infoTable.SetCell(1, 1, tview.NewTableCell(u.Description))
 	infoTable.SetCell(3, 1, tview.NewTableCell(u.LoadState))
 	infoTable.SetCell(4, 1, tview.NewTableCell(u.SubState))
+}
+
+func selectService(pipe *LogPipe, l ServiceItem, filter []sdjournal.Match, logView *tview.TextView, serviceView *tview.Flex, infoTable *tview.Table, confirmDialog *tview.Modal) *LogPipe {
+	updateServiceUI(l.Name, serviceView, infoTable, confirmDialog)
 
 	// cancel previous reader
 	if pipe != nil {
@@ -191,6 +221,22 @@ func selectService(pipe *LogPipe, l ServiceItem, filter []sdjournal.Match, logVi
 	go pipeReader(pipe, logView)
 
 	return pipe
+}
+
+func toggleServiceState(list *ServicesView) error {
+	s := list.Model[list.GetCurrentItem()]
+	u, err := service(s.Name)
+	if err != nil {
+		return err
+	}
+
+	if u.ActiveState == "active" {
+		err = stopService(s.Name)
+	} else {
+		err = startService(s.Name)
+	}
+
+	return err
 }
 
 func init() {
