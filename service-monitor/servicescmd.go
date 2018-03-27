@@ -75,8 +75,8 @@ func servicesForm() (tview.Primitive, error) {
 		SetTitle("Log")
 
 	serviceView.
-		AddItem(infoTable, 0, 1, false).
-		AddItem(logView, 0, 4, false)
+		AddItem(infoTable, 6, 1, false).
+		AddItem(logView, 0, 1, false)
 
 	flex := tview.NewFlex().
 		AddItem(list, 40, 1, true).
