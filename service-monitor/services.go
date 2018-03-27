@@ -92,3 +92,49 @@ func (ts Services) Strings() []string {
 
 	return res
 }
+
+func startService(name string) error {
+	var err error
+	if conn == nil {
+		conn, err = dbus.New()
+		if err != nil {
+			return err
+		}
+	}
+
+	reschan := make(chan string)
+	_, err = conn.StartUnit(name, "fail", reschan)
+	if err != nil {
+		return err
+	}
+
+	job := <-reschan
+	if job != "done" {
+		return fmt.Errorf("failed starting service: %s", job)
+	}
+
+	return nil
+}
+
+func stopService(name string) error {
+	var err error
+	if conn == nil {
+		conn, err = dbus.New()
+		if err != nil {
+			return err
+		}
+	}
+
+	reschan := make(chan string)
+	_, err = conn.StopUnit(name, "fail", reschan)
+	if err != nil {
+		return err
+	}
+
+	job := <-reschan
+	if job != "done" {
+		return fmt.Errorf("failed stopping service: %s", job)
+	}
+
+	return nil
+}
