@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/coreos/go-systemd/sdjournal"
@@ -81,15 +82,25 @@ func servicesForm() (tview.Primitive, error) {
 		AddItem(list, 40, 1, true).
 		AddItem(serviceView, 0, 1, false)
 
+	logLevelDropDown := tview.NewList()
+	logLevelDropDown.
+		SetBorder(true).
+		SetTitle("Log-level")
+	logLevelDialog := tview.NewFlex().
+		AddItem(tview.NewBox(), 0, 1, false).
+		AddItem(tview.NewFlex().
+			SetDirection(tview.FlexRow).
+			AddItem(tview.NewBox(), 0, 1, false).
+			AddItem(logLevelDropDown, 18, 1, true).
+			AddItem(tview.NewBox(), 0, 1, false), 30, 1, true).
+		AddItem(tview.NewBox(), 0, 1, false)
+
 	pages := tview.NewPages()
 	pages.AddPage("flex", flex, true, true)
-	// pages.AddPage("dropdown_loglevel", logLevelDialog, true, false)
+	pages.AddPage("dropdown_loglevel", logLevelDialog, true, false)
 
 	menuPages := tview.NewPages()
 	searchInput := tview.NewInputField()
-	menuPages.AddPage("menu", menu, true, true)
-	menuPages.AddPage("search", searchInput, true, false)
-
 	searchInput.
 		SetLabel("Search for: ").
 		SetFieldWidth(40).
@@ -97,8 +108,26 @@ func servicesForm() (tview.Primitive, error) {
 		SetDoneFunc(func(key tcell.Key) {
 			search = searchInput.GetText()
 			menuPages.HidePage("search")
+			pipe = selectService(pipe, list.Model[list.GetCurrentItem()], filter, logView, serviceView, infoTable)
 			app.SetFocus(list)
 		})
+
+	menuPages.AddPage("menu", menu, true, true)
+	menuPages.AddPage("search", searchInput, true, false)
+
+	logLevelDropDown.AddItem("Emergency", "Only Emergencies", 0, nil).
+		AddItem("Alert", "Alerts or worse", 0, nil).
+		AddItem("Critical", "Critical or worse", 0, nil).
+		AddItem("Error", "Errors or worse", 0, nil).
+		AddItem("Warning", "Warnings or worse", 0, nil).
+		AddItem("Notice", "Notice or worse", 0, nil).
+		AddItem("Informational", "Informational or worse", 0, nil).
+		AddItem("Debug", "Debug or worse", 0, nil)
+	logLevelDropDown.SetSelectedFunc(func(index int, primText, secText string, shortcut rune) {
+		filter = logLevelFilter(index)
+		pages.HidePage("dropdown_loglevel")
+		pipe = selectService(pipe, list.Model[list.GetCurrentItem()], filter, logView, serviceView, infoTable)
+	})
 
 	menu.AddItem("Active Services", tcell.KeyF1, func() {
 		activeOnly = !activeOnly
@@ -150,6 +179,12 @@ func selectService(pipe *LogPipe, l ServiceItem, filter []sdjournal.Match, logVi
 	}
 
 	logView.Clear()
+
+	title := "Log"
+	if len(search) > 0 {
+		title += fmt.Sprintf(" (filtered by %s)", search)
+	}
+	logView.SetTitle(title)
 	logView.ScrollToEnd()
 
 	pipe = logPipe(l.Matches, filter)
