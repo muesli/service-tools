@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/coreos/go-systemd/dbus"
@@ -8,12 +9,21 @@ import (
 
 type Services []dbus.UnitStatus
 
+var (
+	conn *dbus.Conn
+)
+
 func services() (Services, error) {
 	res := []dbus.UnitStatus{}
-	conn, err := dbus.New()
-	if err != nil {
-		return res, err
+
+	var err error
+	if conn == nil {
+		conn, err = dbus.New()
+		if err != nil {
+			return res, err
+		}
 	}
+
 	us, err := conn.ListUnits()
 	if err != nil {
 		return res, err
@@ -27,6 +37,28 @@ func services() (Services, error) {
 	}
 
 	return res, nil
+}
+
+func service(name string) (dbus.UnitStatus, error) {
+	var err error
+	if conn == nil {
+		conn, err = dbus.New()
+		if err != nil {
+			return dbus.UnitStatus{}, err
+		}
+	}
+
+	us, err := conn.ListUnits()
+	if err != nil {
+		return dbus.UnitStatus{}, err
+	}
+	for _, v := range us {
+		if v.Name == name {
+			return v, nil
+		}
+	}
+
+	return dbus.UnitStatus{}, fmt.Errorf("no such service: %s", name)
 }
 
 func (ts Services) ActiveOnly() Services {
