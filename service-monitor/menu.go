@@ -44,10 +44,10 @@ func (m *Menu) Draw(screen tcell.Screen) {
 	x++
 
 	for _, i := range m.Items {
-		tview.Print(screen, tcell.KeyNames[i.Shortcut], x, y, width-2, tview.AlignLeft, tcell.ColorYellow)
+		tview.Print(screen, tcell.KeyNames[i.Shortcut], x, y, width-2, tview.AlignLeft, tcell.GetColor(theme.Colors["Shortcut"]))
 		x += 3
 
-		tview.Print(screen, i.Text, x, y, width, tview.AlignLeft, tcell.ColorTeal)
+		tview.Print(screen, i.Text, x, y, width, tview.AlignLeft, tcell.GetColor(theme.Colors["Menu"]))
 		x += runewidth.StringWidth(i.Text) + 2
 	}
 }

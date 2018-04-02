@@ -98,7 +98,7 @@ func pipeReader(r *LogPipe, w io.Writer) {
 }
 
 func logFormatter(entry *sdjournal.JournalEntry) (string, error) {
-	color := "gray"
+	color := theme.Colors["Message"]
 	switch entry.Fields["PRIORITY"] {
 	case "0":
 		fallthrough
@@ -107,14 +107,17 @@ func logFormatter(entry *sdjournal.JournalEntry) (string, error) {
 	case "2":
 		fallthrough
 	case "3":
-		color = "red"
+		color = theme.Colors["Error"]
 	case "4":
-		color = "darkred"
+		color = theme.Colors["Warning"]
 	case "5":
-		color = "silver"
+		color = theme.Colors["Notice"]
 	}
-	return fmt.Sprintf("[green]%s [blue]%s [%s]%s\n",
+
+	return fmt.Sprintf("[%s]%s [%s]%s [%s]%s\n",
+		theme.Colors["Timestamp"],
 		time.Unix(0, int64(entry.RealtimeTimestamp)*int64(time.Microsecond)).Format("Jan 02 15:04:05"),
+		theme.Colors["Service"],
 		entry.Fields["SYSLOG_IDENTIFIER"],
 		color,
 		entry.Fields["MESSAGE"]), nil

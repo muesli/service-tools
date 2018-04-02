@@ -40,6 +40,8 @@ func logsForm() (tview.Primitive, error) {
 	errLogView := tview.NewTextView()
 	errLogView.ScrollToEnd()
 
+	list.SetMainTextColor(tcell.GetColor(theme.Colors["Service"]))
+	list.SetSecondaryTextColor(tcell.GetColor(theme.Colors["Description"]))
 	list.
 		SetDoneFunc(func() {
 			app.SetFocus(logView)

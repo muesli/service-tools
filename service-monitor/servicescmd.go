@@ -37,6 +37,9 @@ func servicesForm() (tview.Primitive, error) {
 	pages := tview.NewPages()
 	confirmDialog := tview.NewModal()
 	list := NewServicesView()
+	list.SetMainTextColor(tcell.GetColor(theme.Colors["Service"]))
+	list.SetSecondaryTextColor(tcell.GetColor(theme.Colors["Description"]))
+
 	err := list.loadModel(false, activeOnly)
 	if err != nil {
 		return nil, err

@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
@@ -22,10 +23,26 @@ var (
 	apperr error
 	app    = tview.NewApplication()
 	menu   = NewMenu(app)
-	search string
+
+	search   string
+	themeArg string
 )
 
+func parseTheme() {
+	switch strings.ToLower(themeArg) {
+	case "ice":
+		theme = IceTheme
+	case "terminal":
+		theme = TerminalTheme
+	default:
+		panic("no such theme: " + themeArg)
+	}
+}
+
 func main() {
+	RootCmd.PersistentFlags().StringVar(&themeArg, "theme", "terminal", "color scheme (ice, terminal)")
+	cobra.OnInitialize(parseTheme)
+
 	if err := RootCmd.Execute(); err != nil {
 		os.Exit(-1)
 	}
