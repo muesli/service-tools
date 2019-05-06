@@ -2,6 +2,19 @@
 
 A growing collection of convenient little tools to work with systemd services
 
+## Installation
+
+The `service-tools` require Go 1.11 or higher. Make sure you have a working Go
+environment. See the [install instructions](http://golang.org/doc/install.html).
+
+### From source
+
+    git clone https://github.com/muesli/service-tools.git
+    cd service-tools/service-generator
+    go build
+    cd ../service-monitor
+    go build
+
 ## Overview
 
 ### service-generator
