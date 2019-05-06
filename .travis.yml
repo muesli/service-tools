@@ -3,6 +3,7 @@ language: go
 os:
   - linux
 
+dist: xenial
 addons:
   apt:
     packages:
