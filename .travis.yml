@@ -27,4 +27,8 @@ notifications:
     on_success: change
     on_failure: always
 
-script: go build
+script:
+  - cd $GOPATH/src/github.com/muesli/service-tools/service-monitor
+  - go build
+  - cd $GOPATH/src/github.com/muesli/service-tools/service-generator
+  - go build
