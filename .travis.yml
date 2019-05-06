@@ -5,25 +5,21 @@ os:
   - osx
 
 go:
-  - 1.4
-  - 1.5.x
-  - 1.6.x
-  - 1.7.x
-  - 1.8.x
-  - 1.9.x
-  - 1.10.x
+  - 1.11.x
+  - 1.12.x
   - tip
 
 matrix:
-    exclude:
-        - os: osx
-          go: 1.4
-        - os: osx
-          go: 1.5.x
-        - os: osx
-          go: 1.6.x
+  allow_failures:
+    - go: tip
+
+env:
+  global:
+    GO111MODULE=on
 
 notifications:
   email:
     on_success: change
     on_failure: always
+
+script: go build
