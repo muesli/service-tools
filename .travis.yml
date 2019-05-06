@@ -2,7 +2,11 @@ language: go
 
 os:
   - linux
-  - osx
+
+addons:
+  apt:
+    packages:
+    - libsystemd-dev
 
 go:
   - 1.11.x
